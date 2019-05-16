@@ -25,14 +25,14 @@ static int SPLIT_IDXTAB[4][4] = {
 
 QUADNODE* quadtree_create(int32_t left, int32_t top, int32_t right, int32_t bottom)
 {
-    QUADNODE *root  = calloc(1, sizeof(QUADNODE));
-    if (root) {
-        root->left   = left  ;
-        root->top    = top   ;
-        root->right  = right ;
-        root->bottom = bottom;
+    QUADNODE *tree  = calloc(1, sizeof(QUADNODE));
+    if (tree) {
+        tree->left   = left  ;
+        tree->top    = top   ;
+        tree->right  = right ;
+        tree->bottom = bottom;
     }
-    return root;
+    return tree;
 }
 
 void quadtree_destroy(QUADNODE *tree)
