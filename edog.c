@@ -6,7 +6,7 @@
 
 #pragma pack(1)
 typedef struct {
-    uint8_t  flags;
+    uint8_t flags;
     union {
         NODEDATA nodedata ;
         int32_t  chdidx[4];
@@ -52,37 +52,42 @@ void quadtree_insert(QUADNODE *tree, NODEDATA *data)
 {
     int i;
     if (!tree) return;
-    if (!QUADNODE_ISLEAF(tree)) {
-        for (i=0; i<4; i++) {
-            if (!tree->child[i]) continue;
-            if (  data->posx >= tree->child[i]->left && data->posx < tree->child[i]->right
-               && data->posy >= tree->child[i]->top  && data->posy < tree->child[i]->bottom ) {
-                quadtree_insert(tree->child[i], data);
-                break;
-            }
-        }
-    } else if (tree->used) {
-        int points[6] = { tree->left, tree->top, tree->right, tree->bottom, (tree->left + tree->right ) / 2, (tree->top  + tree->bottom) / 2 };
-        for (i=0; i<4; i++) {
-            tree->child[i] = calloc(1, sizeof(QUADNODE));
-            if (!tree->child[i]) continue;
-            tree->child[i]->left   = points[SPLIT_IDXTAB[i][0]];
-            tree->child[i]->top    = points[SPLIT_IDXTAB[i][1]];
-            tree->child[i]->right  = points[SPLIT_IDXTAB[i][2]];
-            tree->child[i]->bottom = points[SPLIT_IDXTAB[i][3]];
-            if (  tree->data.posx >= tree->child[i]->left && tree->data.posx < tree->child[i]->right
-               && tree->data.posy >= tree->child[i]->top  && tree->data.posy < tree->child[i]->bottom ) {
-                quadtree_insert(tree->child[i], &tree->data);
-                memset(&tree->data, 0, sizeof(tree->data));
-            }
-            if (  data->posx >= tree->child[i]->left && data->posx < tree->child[i]->right
-               && data->posy >= tree->child[i]->top  && data->posy < tree->child[i]->bottom ) {
-                quadtree_insert(tree->child[i], data);
+    if (QUADNODE_ISLEAF(tree)) {
+        if (!tree->used) {
+            tree->used = 1;
+            tree->data = *data;
+        } else {
+            int points[6] = { tree->left, tree->top, tree->right, tree->bottom, (tree->left + tree->right ) / 2, (tree->top  + tree->bottom) / 2 };
+            for (i=0; i<4; i++) {
+                tree->child[i] = calloc(1, sizeof(QUADNODE));
+                if (!tree->child[i]) continue;
+                tree->child[i]->left   = points[SPLIT_IDXTAB[i][0]];
+                tree->child[i]->top    = points[SPLIT_IDXTAB[i][1]];
+                tree->child[i]->right  = points[SPLIT_IDXTAB[i][2]];
+                tree->child[i]->bottom = points[SPLIT_IDXTAB[i][3]];
+                if (  tree->data.posx >= tree->child[i]->left && tree->data.posx < tree->child[i]->right
+                   && tree->data.posy >= tree->child[i]->top  && tree->data.posy < tree->child[i]->bottom ) {
+                    tree->child[i]->used = 1;
+                    tree->child[i]->data = tree->data;
+                    memset(&tree->data, 0, sizeof(tree->data));
+                }
+                if (  data->posx >= tree->child[i]->left && data->posx < tree->child[i]->right
+                   && data->posy >= tree->child[i]->top  && data->posy < tree->child[i]->bottom ) {
+                    if (data->posx != tree->child[i]->data.posx || data->posy != tree->child[i]->data.posy) { // todo...
+                        quadtree_insert(tree->child[i], data);
+                    }
+                }
             }
         }
     } else {
-        tree->used = 1;
-        tree->data = *data;
+        for (i=0; i<4; i++) {
+            if (!tree->child[i]) continue;
+            if (  data->posx >= tree->child[i]->left && data->posx < tree->child[i]->right
+               && data->posy >= tree->child[i]->top  && data->posy < tree->child[i]->bottom ) {
+                quadtree_insert(tree->child[i], data);
+                return;
+            }
+        }
     }
 }
 
@@ -140,7 +145,7 @@ static void quadtree_assign_chdidx(QUADNODE *tree, FILE *fp, int bin)
             }
             fwrite(&record, sizeof(record), 1, fp);
         } else {
-            fprintf(fp, "%7d (%11d %11d %11d %11d) (%11d %11d %3d %3d %3d %3d) (%7d %7d %7d %7d)\r\n",
+            fprintf(fp, "%7d (%10d %10d %10d %10d) (%10d %10d %3d %3d %3d %2d) (%7d %7d %7d %7d)\r\n",
                 tree->index, tree->left, tree->top, tree->right, tree->bottom,
                 tree->data.posx, tree->data.posy, tree->data.angle, tree->data.speed, tree->data.ctype, tree->data.dtype,
                 tree->chdidx[0], tree->chdidx[1], tree->chdidx[2], tree->chdidx[3]);
@@ -157,7 +162,7 @@ void quadtree_save_edx(char *file, QUADNODE *tree, int bin)
     FILE   *fp  = fopen(file, "wb");
     int32_t idx = 0;
     if (fp) {
-        fprintf(fp, "edog %s file v1.0.0 %d %d %d %d\r\n", bin ? "edb" : "edt", tree->left, tree->top, tree->right, tree->bottom);
+        fprintf(fp, "edog %s file v1.0.0 %10d %10d %10d %10d\r\n", bin ? "edb" : "edt", tree->left, tree->top, tree->right, tree->bottom);
         quadtree_assign_index (tree, &idx   );
         quadtree_assign_chdidx(tree, fp, bin);
         fclose(fp);
@@ -167,7 +172,7 @@ void quadtree_save_edx(char *file, QUADNODE *tree, int bin)
 static void load_node_from_edt(QUADNODE *node, FILE *fp, int index)
 {
     int32_t idx, left, top, right, bottom, posx, posy, angle, speed, ctype, dtype, child[4];
-    fseek (fp, 66 + index * 135, SEEK_SET); // 66 is the size of file header, and 135 is the line size of edt record
+    fseek (fp, 66 + index * 128, SEEK_SET); // 66 is the size of file header, and 128 is the line size of edt record
     fscanf(fp, "%d (%d %d %d %d) (%d %d %d %d %d %d) (%d %d %d %d)",
           &idx, &left, &top, &right, &bottom, &posx, &posy, &angle, &speed, &ctype, &dtype,
           &(child[0]), &(child[1]), &(child[2]), &(child[3]));
@@ -257,20 +262,21 @@ int main(void)
     QUADNODE *node = NULL;
     FILE     *fp   = NULL;
     double    posx, posy;
-    int       angle, speed, ctype, dtype, ret;
+    int       angle, speed, ctype, dtype, findx, findy, ret;
     NODEDATA  data;
 
     // create quadtreee
-    tree = quadtree_create(-180 * 10000000, -90 * 10000000, 180 * 10000000, 90 * 10000000);
+    tree = quadtree_create(-180 * 1000000, -90 * 1000000, 180 * 1000000, 90 * 1000000);
 
     // read data from edog.txt and build quadtree
     fp = fopen("edog.txt", "rb");
     if (fp) {
         while (1) {
-            ret = fscanf(fp, "%lf %lf %d %d %d %d", &posx, &posy, &angle, &speed, &ctype, &dtype);
+//          ret = fscanf(fp, "%lf %lf %d %d %d %d", &posx, &posy, &angle, &speed, &ctype, &dtype);
+            ret = fscanf(fp, "%lf %lf %d %d %d %d", &posy, &posx, &angle, &speed, &ctype, &dtype);
             if (ret != 6) break;
-            data.posx  = posx * 10000000;
-            data.posy  = posy * 10000000;
+            data.posx  = posx * 1000000;
+            data.posy  = posy * 1000000;
             data.angle = angle;
             data.speed = speed;
             data.ctype = ctype;
@@ -280,10 +286,13 @@ int main(void)
         fclose(fp);
     }
 
+    findx = 40.6561759 * 1000000;
+    findy = 55.6055057 * 1000000;
+
     // find data from quadtree
-    node = quadtree_find_from_tree(tree, 55.6055057 * 10000000, 40.6561759 * 10000000);
+    node = quadtree_find_from_tree(tree, findx, findy);
     if (node) {
-        printf("pos  : %lf, %lf\n", (double)node->data.posx / 10000000, (double)node->data.posy / 10000000);
+        printf("pos  : %lf, %lf\n", (double)node->data.posx / 1000000, (double)node->data.posy / 1000000);
         printf("angle: %d\n", node->data.angle);
         printf("speed: %d\n", node->data.speed);
         printf("ctype: %d\n", node->data.ctype);
@@ -297,9 +306,9 @@ int main(void)
     quadtree_destroy(tree);
 
     // find data from edt file
-    ret = quadtree_find_from_edx("edog.edt", 55.6055057 * 10000000, 40.6561759 * 10000000, &data, 0);
+    ret = quadtree_find_from_edx("edog.edt", findx, findy, &data, 0);
     if (ret == 0) {
-        printf("pos  : %lf, %lf\n", (double)data.posx / 10000000, (double)data.posy / 10000000);
+        printf("pos  : %lf, %lf\n", (double)data.posx / 1000000, (double)data.posy / 1000000);
         printf("angle: %d\n", data.angle);
         printf("speed: %d\n", data.speed);
         printf("ctype: %d\n", data.ctype);
@@ -308,9 +317,9 @@ int main(void)
     }
 
     // find data from edb file
-    ret = quadtree_find_from_edx("edog.edb", 55.6055057 * 10000000, 40.6561759 * 10000000, &data, 1);
+    ret = quadtree_find_from_edx("edog.edb", findx, findy, &data, 1);
     if (ret == 0) {
-        printf("pos  : %lf, %lf\n", (double)data.posx / 10000000, (double)data.posy / 10000000);
+        printf("pos  : %lf, %lf\n", (double)data.posx / 1000000, (double)data.posy / 1000000);
         printf("angle: %d\n", data.angle);
         printf("speed: %d\n", data.speed);
         printf("ctype: %d\n", data.ctype);
