@@ -132,7 +132,7 @@ QUADNODE* quadtree_find_from_tree(QUADNODE *tree, int32_t x, int32_t y)
 static void quadtree_assign_index(QUADNODE *tree, int32_t *index)
 {
     int i;
-    if (tree) {
+    if (tree && (!QUADNODE_ISLEAF(tree) || tree->used)) {
         tree->index = (*index)++;
         for (i=0; i<4; i++) {
             if (!tree->child[i]) continue;
@@ -144,7 +144,7 @@ static void quadtree_assign_index(QUADNODE *tree, int32_t *index)
 static void quadtree_assign_chdidx(QUADNODE *tree, FILE *fp)
 {
     int i;
-    if (tree) {
+    if (tree && (!QUADNODE_ISLEAF(tree) || tree->used)) {
         for (i=0; i<4; i++) {
             if (!tree->child[i]) continue;
             tree->chdidx[i] = tree->child[i]->index;
@@ -190,7 +190,7 @@ int quadtree_find_from_dbt(char *file, int32_t x, int32_t y, NODEDATA *data)
     int32_t  stack[4] = {};
     QUADNODE node     = {};
     FILE    *fp       = fopen(file, "rb");
-    int      top = 0, ret = -1;
+    int      top = 0, ret = -1, i;
     if (fp) {
         stack[top++] = 0;
         while (top > 0) {
@@ -201,8 +201,11 @@ int quadtree_find_from_dbt(char *file, int32_t x, int32_t y, NODEDATA *data)
                     ret   = 0;
                     break;
                 } else {
-                    top   = 4;
-                    memcpy(stack, node.chdidx, sizeof(stack));
+                    for (top=0,i=0; i<4; i++) {
+                        if (node.chdidx[i]) {
+                            stack[top++] = node.chdidx[i];
+                        }
+                    }
                 }
             }
         }
