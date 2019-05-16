@@ -73,8 +73,10 @@ void quadtree_insert(QUADNODE *tree, NODEDATA *data)
                 }
                 if (  data->posx >= tree->child[i]->left && data->posx < tree->child[i]->right
                    && data->posy >= tree->child[i]->top  && data->posy < tree->child[i]->bottom ) {
-                    if (data->posx != tree->child[i]->data.posx || data->posy != tree->child[i]->data.posy) { // todo...
+                    if (data->posx != tree->child[i]->data.posx || data->posy != tree->child[i]->data.posy) {
                         quadtree_insert(tree->child[i], data);
+                    } else {
+                        // todo...
                     }
                 }
             }
