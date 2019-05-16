@@ -96,9 +96,7 @@ void quadtree_insert(QUADNODE *tree, NODEDATA *data)
 QUADNODE* quadtree_find_from_tree(QUADNODE *tree, int32_t x, int32_t y)
 {
     int i;
-    if (QUADNODE_ISLEAF(tree)) {
-        return tree;
-    }
+    if (QUADNODE_ISLEAF(tree)) return tree;
     for (i=0; i<4; i++) {
         if (!tree->child[i]) continue;
         if (  x >= tree->child[i]->left && x < tree->child[i]->right
@@ -109,54 +107,94 @@ QUADNODE* quadtree_find_from_tree(QUADNODE *tree, int32_t x, int32_t y)
     return NULL;
 }
 
+#define QUEUE_SIZE  (2 * 1024 * 1024)
 static void quadtree_assign_index(QUADNODE *tree, int32_t *index)
 {
-    int i;
-    if (tree && (!QUADNODE_ISLEAF(tree) || tree->used)) {
-        tree->index = (*index)++;
+    QUADNODE **queue = malloc(sizeof(QUADNODE*) * QUEUE_SIZE);
+    QUADNODE  *node  = NULL;
+    int        tail  = 0, head = 0, qnum = 0, i;
+    if (!queue) return;
+
+    // put first node into queue
+    queue[tail & (QUEUE_SIZE - 1)] = tree;
+    tail++; qnum++;
+
+    while (qnum > 0) {
+        // dequeue
+        node = queue[head & (QUEUE_SIZE - 1)];
+        head++; qnum--;
+
+        // handle current node
+        node->index = (*index)++;
+
         for (i=0; i<4; i++) {
-            if (!tree->child[i]) continue;
-            quadtree_assign_index(tree->child[i], index);
+            if (node->child[i]) {
+                // enqueue
+                queue[tail & (QUEUE_SIZE - 1)] = node->child[i];
+                tail++; qnum++;
+                if (qnum > QUEUE_SIZE) printf("queue size overflow !\n");
+            }
         }
     }
+    free(queue);
 }
 
 static void quadtree_assign_chdidx(QUADNODE *tree, FILE *fp, int bin)
 {
-    int i;
-    if (tree && (!QUADNODE_ISLEAF(tree) || tree->used)) {
+    QUADNODE **queue = malloc(sizeof(QUADNODE*) * QUEUE_SIZE);
+    QUADNODE  *node  = NULL;
+    int        tail  = 0, head = 0, qnum = 0, i;
+    if (!queue) return;
+
+    // put first node into queue
+    queue[tail & (QUEUE_SIZE - 1)] = tree;
+    tail++; qnum++;
+
+    while (qnum > 0) {
+        // dequeue
+        node = queue[head & (QUEUE_SIZE - 1)];
+        head++; qnum--;
+
+        //++ handle current node
         for (i=0; i<4; i++) {
-            if (!tree->child[i]) continue;
-            tree->chdidx[i] = tree->child[i]->index;
+            if (!node->child[i]) continue;
+            node->chdidx[i] = node->child[i]->index;
         }
         if (bin) {
             EDBRECORD record;
-            record.flags = QUADNODE_ISLEAF(tree);
+            record.flags = QUADNODE_ISLEAF(node);
             if (record.flags) {
-                record.data.nodedata.posx  = tree->data.posx ;
-                record.data.nodedata.posy  = tree->data.posy ;
-                record.data.nodedata.angle = tree->data.angle;
-                record.data.nodedata.speed = tree->data.speed;
-                record.data.nodedata.ctype = tree->data.ctype;
-                record.data.nodedata.dtype = tree->data.dtype;
+                record.data.nodedata.posx  = node->data.posx ;
+                record.data.nodedata.posy  = node->data.posy ;
+                record.data.nodedata.angle = node->data.angle;
+                record.data.nodedata.speed = node->data.speed;
+                record.data.nodedata.ctype = node->data.ctype;
+                record.data.nodedata.dtype = node->data.dtype;
             } else {
-                record.data.chdidx[0] = tree->chdidx[0];
-                record.data.chdidx[1] = tree->chdidx[1];
-                record.data.chdidx[2] = tree->chdidx[2];
-                record.data.chdidx[3] = tree->chdidx[3];
+                record.data.chdidx[0] = node->chdidx[0];
+                record.data.chdidx[1] = node->chdidx[1];
+                record.data.chdidx[2] = node->chdidx[2];
+                record.data.chdidx[3] = node->chdidx[3];
             }
             fwrite(&record, sizeof(record), 1, fp);
         } else {
             fprintf(fp, "%7d (%10d %10d %10d %10d) (%10d %10d %3d %3d %3d %2d) (%7d %7d %7d %7d)\r\n",
-                tree->index, tree->left, tree->top, tree->right, tree->bottom,
-                tree->data.posx, tree->data.posy, tree->data.angle, tree->data.speed, tree->data.ctype, tree->data.dtype,
-                tree->chdidx[0], tree->chdidx[1], tree->chdidx[2], tree->chdidx[3]);
+                node->index, node->left, node->top, node->right, node->bottom,
+                node->data.posx, node->data.posy, node->data.angle, node->data.speed, node->data.ctype, node->data.dtype,
+                node->chdidx[0], node->chdidx[1], node->chdidx[2], node->chdidx[3]);
         }
+        //-- handle current node
+
         for (i=0; i<4; i++) {
-            if (!tree->child[i]) continue;
-            quadtree_assign_chdidx(tree->child[i], fp, bin);
+            if (node->child[i]) {
+                // enqueue
+                queue[tail & (QUEUE_SIZE - 1)] = node->child[i];
+                tail++; qnum++;
+                if (qnum > QUEUE_SIZE) printf("queue size overflow !\n");
+            }
         }
     }
+    free(queue);
 }
 
 void quadtree_save_edx(char *file, QUADNODE *tree, int bin)
