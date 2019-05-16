@@ -128,7 +128,7 @@ static void quadtree_assign_index(QUADNODE *tree, int32_t *index)
         node->index = (*index)++;
 
         for (i=0; i<4; i++) {
-            if (node->child[i]) {
+            if (node->child[i] && (!QUADNODE_ISLEAF(node->child[i]) || node->child[i]->used)) {
                 // enqueue
                 queue[tail & (QUEUE_SIZE - 1)] = node->child[i];
                 tail++; qnum++;
@@ -186,7 +186,7 @@ static void quadtree_assign_chdidx(QUADNODE *tree, FILE *fp, int bin)
         //-- handle current node
 
         for (i=0; i<4; i++) {
-            if (node->child[i]) {
+            if (node->child[i] && (!QUADNODE_ISLEAF(node->child[i]) || node->child[i]->used)) {
                 // enqueue
                 queue[tail & (QUEUE_SIZE - 1)] = node->child[i];
                 tail++; qnum++;
