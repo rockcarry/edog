@@ -140,7 +140,7 @@ static void quadtree_assign_chdidx(QUADNODE *tree, FILE *fp, int bin)
             }
             fwrite(&record, sizeof(record), 1, fp);
         } else {
-            fprintf(fp, "%7d (%11d %11d %11d %11d) (%11d %11d %3d %3d %3d %3d) (%8d %8d %8d %8d)\r\n",
+            fprintf(fp, "%7d (%11d %11d %11d %11d) (%11d %11d %3d %3d %3d %3d) (%7d %7d %7d %7d)\r\n",
                 tree->index, tree->left, tree->top, tree->right, tree->bottom,
                 tree->data.posx, tree->data.posy, tree->data.angle, tree->data.speed, tree->data.ctype, tree->data.dtype,
                 tree->chdidx[0], tree->chdidx[1], tree->chdidx[2], tree->chdidx[3]);
@@ -167,9 +167,9 @@ void quadtree_save_edx(char *file, QUADNODE *tree, int bin)
 static void load_node_from_edt(QUADNODE *node, FILE *fp, int index)
 {
     int32_t idx, left, top, right, bottom, posx, posy, angle, speed, ctype, dtype, child[4];
-    fseek (fp, 66 + index * 139, SEEK_SET);
+    fseek (fp, 66 + index * 135, SEEK_SET); // 66 is the size of file header, and 135 is the line size of edt record
     fscanf(fp, "%d (%d %d %d %d) (%d %d %d %d %d %d) (%d %d %d %d)",
-          &idx, &left, &top, &right, &bottom, &posx, &posy, &angle, &speed, &dtype, &ctype,
+          &idx, &left, &top, &right, &bottom, &posx, &posy, &angle, &speed, &ctype, &dtype,
           &(child[0]), &(child[1]), &(child[2]), &(child[3]));
     node->left      = left;
     node->top       = top;
@@ -190,7 +190,7 @@ static void load_node_from_edt(QUADNODE *node, FILE *fp, int index)
 static void load_node_from_edb(QUADNODE *node, FILE *fp, int index)
 {
     EDBRECORD record;
-    fseek(fp, 66 + index * sizeof(EDBRECORD), SEEK_SET);
+    fseek(fp, 66 + index * sizeof(EDBRECORD), SEEK_SET); // 66 is the size of file header
     fread(&record, sizeof(record), 1, fp);
     if (record.flags) {
         node->data.posx = record.data.nodedata.posx;
