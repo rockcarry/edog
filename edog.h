@@ -6,7 +6,7 @@
 typedef struct {
     int32_t  posx;
     int32_t  posy;
-    uint16_t angle;
+    int16_t  angle[5];
     uint8_t  speed;
     uint8_t  ctype;
     uint8_t  dtype;

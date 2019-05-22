@@ -6,11 +6,17 @@
 
 #pragma pack(1)
 typedef struct {
-    uint8_t flags;
-    union {
-        NODEDATA nodedata ;
-        int32_t  chdidx[4];
-    } data;
+    int32_t  posx;
+    int32_t  posy;
+    unsigned angle0 : 9;
+    unsigned angle1 : 9;
+    unsigned angle2 : 9;
+    unsigned angle3 : 9;
+    unsigned angle4 : 9;
+    unsigned speed  : 8;
+    unsigned ctype  : 8;
+    unsigned dtype  : 2;
+    unsigned isleaf : 1;
 } EDBRECORD;
 #pragma pack()
 
@@ -50,7 +56,7 @@ void quadtree_destroy(QUADNODE *tree)
 
 void quadtree_insert(QUADNODE *tree, NODEDATA *data)
 {
-    int i;
+    int i, j;
     if (!tree) return;
     if (QUADNODE_ISLEAF(tree)) {
         if (!tree->used) {
@@ -76,7 +82,19 @@ void quadtree_insert(QUADNODE *tree, NODEDATA *data)
                     if (data->posx != tree->child[i]->data.posx || data->posy != tree->child[i]->data.posy) {
                         quadtree_insert(tree->child[i], data);
                     } else {
-                        // todo...
+                        for (j=0; j<5; j++) {
+                            if (tree->child[i]->data.angle[j] != -1 && abs(tree->child[i]->data.angle[j] - data->angle[0]) <= 5) {
+//                              printf("already insert this angle !\n");
+                                break;
+                            } else if (tree->child[i]->data.angle[j] == -1) {
+//                              printf("insert new angle: %d !\n", data->angle[0]);
+                                tree->child[i]->data.angle[j] = data->angle[0];
+                                break;
+                            }
+                        }
+                        if (j == 5) {
+                            printf("failed to insert node: %10d %10d %3d %3d %3d %3d\n", data->posx, data->posy, data->angle[0], data->speed, data->ctype, data->dtype);
+                        }
                     }
                 }
             }
@@ -162,26 +180,27 @@ static void quadtree_assign_chdidx(QUADNODE *tree, FILE *fp, int bin)
         }
         if (bin) {
             EDBRECORD record;
-            record.flags = QUADNODE_ISLEAF(node);
-            if (record.flags) {
-                record.data.nodedata.posx  = node->data.posx ;
-                record.data.nodedata.posy  = node->data.posy ;
-                record.data.nodedata.angle = node->data.angle;
-                record.data.nodedata.speed = node->data.speed;
-                record.data.nodedata.ctype = node->data.ctype;
-                record.data.nodedata.dtype = node->data.dtype;
+            record.isleaf = QUADNODE_ISLEAF(node);
+            if (record.isleaf) {
+                record.posx   = node->data.posx ;
+                record.posy   = node->data.posy ;
+                record.angle0 = node->data.angle[0];
+                record.angle1 = node->data.angle[1];
+                record.angle2 = node->data.angle[2];
+                record.angle3 = node->data.angle[3];
+                record.angle4 = node->data.angle[4];
+                record.speed  = node->data.speed;
+                record.ctype  = node->data.ctype;
+                record.dtype  = node->data.dtype;
             } else {
-                record.data.chdidx[0] = node->chdidx[0];
-                record.data.chdidx[1] = node->chdidx[1];
-                record.data.chdidx[2] = node->chdidx[2];
-                record.data.chdidx[3] = node->chdidx[3];
+                memcpy(&record, node->chdidx, sizeof(int32_t) * 4);
             }
             fwrite(&record, sizeof(record), 1, fp);
         } else {
-            fprintf(fp, "%7d (%10d %10d %10d %10d) (%10d %10d %3d %3d %3d %2d) (%7d %7d %7d %7d)\r\n",
-                node->index, node->left, node->top, node->right, node->bottom,
-                node->data.posx, node->data.posy, node->data.angle, node->data.speed, node->data.ctype, node->data.dtype,
-                node->chdidx[0], node->chdidx[1], node->chdidx[2], node->chdidx[3]);
+            fprintf(fp, "%7d (%10d %10d %10d %10d) (%10d %10d %3d %3d %3d %3d %3d %3d %3d %3d) (%7d %7d %7d %7d)\r\n",
+                node->index, node->left, node->top, node->right, node->bottom, node->data.posx, node->data.posy,
+                node->data.angle[0], node->data.angle[1], node->data.angle[2], node->data.angle[3], node->data.angle[4],
+                node->data.speed, node->data.ctype, node->data.dtype, node->chdidx[0], node->chdidx[1], node->chdidx[2], node->chdidx[3]);
         }
         //-- handle current node
 
@@ -211,25 +230,29 @@ void quadtree_save_edx(char *file, QUADNODE *tree, int bin)
 
 static void load_node_from_edt(QUADNODE *node, FILE *fp, int index)
 {
-    int32_t idx, left, top, right, bottom, posx, posy, angle, speed, ctype, dtype, child[4];
-    fseek (fp, 66 + index * 128, SEEK_SET); // 66 is the size of file header, and 128 is the line size of edt record
-    fscanf(fp, "%d (%d %d %d %d) (%d %d %d %d %d %d) (%d %d %d %d)",
-          &idx, &left, &top, &right, &bottom, &posx, &posy, &angle, &speed, &ctype, &dtype,
-          &(child[0]), &(child[1]), &(child[2]), &(child[3]));
-    node->left      = left;
-    node->top       = top;
-    node->right     = right;
-    node->bottom    = bottom;
-    node->data.posx = posx;
-    node->data.posy = posy;
-    node->data.angle= angle;
-    node->data.speed= speed;
-    node->data.dtype= dtype;
-    node->data.ctype= ctype;
-    node->chdidx[0] = child[0];
-    node->chdidx[1] = child[1];
-    node->chdidx[2] = child[2];
-    node->chdidx[3] = child[3];
+    int32_t idx, left, top, right, bottom, posx, posy, angle[5], speed, ctype, dtype, child[4];
+    fseek (fp, 66 + index * 145, SEEK_SET); // 66 is the size of file header, and 128 is the line size of edt record
+    fscanf(fp, "%d (%d %d %d %d) (%d %d %d %d %d %d %d %d %d %d) (%d %d %d %d)",
+          &idx, &left, &top, &right, &bottom, &posx, &posy, &angle[0], &angle[1], &angle[2], &angle[3], &angle[4],
+          &speed, &ctype, &dtype, &(child[0]), &(child[1]), &(child[2]), &(child[3]));
+    node->left         = left;
+    node->top          = top;
+    node->right        = right;
+    node->bottom       = bottom;
+    node->data.posx    = posx;
+    node->data.posy    = posy;
+    node->data.angle[0]= angle[0];
+    node->data.angle[1]= angle[1];
+    node->data.angle[2]= angle[2];
+    node->data.angle[3]= angle[3];
+    node->data.angle[4]= angle[4];
+    node->data.speed   = speed;
+    node->data.dtype   = dtype;
+    node->data.ctype   = ctype;
+    node->chdidx[0]    = child[0];
+    node->chdidx[1]    = child[1];
+    node->chdidx[2]    = child[2];
+    node->chdidx[3]    = child[3];
 }
 
 static void load_node_from_edb(QUADNODE *node, FILE *fp, int index)
@@ -237,19 +260,20 @@ static void load_node_from_edb(QUADNODE *node, FILE *fp, int index)
     EDBRECORD record;
     fseek(fp, 66 + index * sizeof(EDBRECORD), SEEK_SET); // 66 is the size of file header
     fread(&record, sizeof(record), 1, fp);
-    if (record.flags) {
-        node->data.posx = record.data.nodedata.posx;
-        node->data.posy = record.data.nodedata.posy;
-        node->data.angle= record.data.nodedata.angle;
-        node->data.speed= record.data.nodedata.speed;
-        node->data.dtype= record.data.nodedata.dtype;
-        node->data.ctype= record.data.nodedata.ctype;
-        node->chdidx[0] = node->chdidx[1] = node->chdidx[2] = node->chdidx[3] = 0;
+    if (record.isleaf) {
+        node->data.posx    = record.posx;
+        node->data.posy    = record.posy;
+        node->data.angle[0]= record.angle0;
+        node->data.angle[1]= record.angle1;
+        node->data.angle[2]= record.angle2;
+        node->data.angle[3]= record.angle3;
+        node->data.angle[4]= record.angle4;
+        node->data.speed   = record.speed;
+        node->data.dtype   = record.dtype;
+        node->data.ctype   = record.ctype;
+        node->chdidx[0]    = node->chdidx[1] = node->chdidx[2] = node->chdidx[3] = 0;
     } else {
-        node->chdidx[0] = record.data.chdidx[0];
-        node->chdidx[1] = record.data.chdidx[1];
-        node->chdidx[2] = record.data.chdidx[2];
-        node->chdidx[3] = record.data.chdidx[3];
+        memcpy(node->chdidx, &record, sizeof(int32_t) * 4);
     }
 }
 
@@ -315,12 +339,16 @@ int main(void)
 //          ret = fscanf(fp, "%lf %lf %d %d %d %d", &posx, &posy, &angle, &speed, &ctype, &dtype);
             ret = fscanf(fp, "%lf %lf %d %d %d %d", &posy, &posx, &angle, &speed, &ctype, &dtype);
             if (ret != 6) break;
-            data.posx  = posx * 1000000;
-            data.posy  = posy * 1000000;
-            data.angle = angle;
-            data.speed = speed;
-            data.ctype = ctype;
-            data.dtype = dtype;
+            data.posx     = posx * 1000000;
+            data.posy     = posy * 1000000;
+            data.angle[0] = angle;
+            data.angle[1] = -1;
+            data.angle[2] = -1;
+            data.angle[3] = -1;
+            data.angle[4] = -1;
+            data.speed    = speed;
+            data.ctype    = ctype;
+            data.dtype    = dtype;
             quadtree_insert(tree, &data);
         }
         fclose(fp);
@@ -333,7 +361,7 @@ int main(void)
     node = quadtree_find_from_tree(tree, findx, findy);
     if (node) {
         printf("pos  : %lf, %lf\n", (double)node->data.posx / 1000000, (double)node->data.posy / 1000000);
-        printf("angle: %d\n", node->data.angle);
+        printf("angle: %d %d %d %d %d\n", node->data.angle[0], node->data.angle[1], node->data.angle[2], node->data.angle[3], node->data.angle[4]);
         printf("speed: %d\n", node->data.speed);
         printf("ctype: %d\n", node->data.ctype);
         printf("dtype: %d\n", node->data.dtype);
@@ -349,7 +377,7 @@ int main(void)
     ret = quadtree_find_from_edx("edog.edt", findx, findy, &data, 0);
     if (ret == 0) {
         printf("pos  : %lf, %lf\n", (double)data.posx / 1000000, (double)data.posy / 1000000);
-        printf("angle: %d\n", data.angle);
+        printf("angle: %d %d %d %d %d\n", node->data.angle[0], node->data.angle[1], node->data.angle[2], node->data.angle[3], node->data.angle[4]);
         printf("speed: %d\n", data.speed);
         printf("ctype: %d\n", data.ctype);
         printf("dtype: %d\n", data.dtype);
@@ -360,7 +388,7 @@ int main(void)
     ret = quadtree_find_from_edx("edog.edb", findx, findy, &data, 1);
     if (ret == 0) {
         printf("pos  : %lf, %lf\n", (double)data.posx / 1000000, (double)data.posy / 1000000);
-        printf("angle: %d\n", data.angle);
+        printf("angle: %d %d %d %d %d\n", node->data.angle[0], node->data.angle[1], node->data.angle[2], node->data.angle[3], node->data.angle[4]);
         printf("speed: %d\n", data.speed);
         printf("ctype: %d\n", data.ctype);
         printf("dtype: %d\n", data.dtype);
