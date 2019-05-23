@@ -126,11 +126,11 @@ QUADNODE* quadtree_find_from_tree(QUADNODE *tree, int32_t x, int32_t y)
 }
 
 #define QUEUE_SIZE  (2 * 1024 * 1024)
-static void quadtree_assign_index(QUADNODE *tree, int32_t *index)
+static void quadtree_assign_index(QUADNODE *tree)
 {
     QUADNODE **queue = malloc(sizeof(QUADNODE*) * QUEUE_SIZE);
     QUADNODE  *node  = NULL;
-    int        tail  = 0, head = 0, qnum = 0, i;
+    int        tail  = 0, head = 0, qnum = 0, index = 0, i;
     if (!queue) return;
 
     // put first node into queue
@@ -143,7 +143,7 @@ static void quadtree_assign_index(QUADNODE *tree, int32_t *index)
         head++; qnum--;
 
         // handle current node
-        node->index = (*index)++;
+        node->index = index++;
 
         for (i=0; i<4; i++) {
             if (node->child[i] && (!QUADNODE_ISLEAF(node->child[i]) || node->child[i]->used)) {
@@ -218,11 +218,10 @@ static void quadtree_assign_chdidx(QUADNODE *tree, FILE *fp, int bin)
 
 void quadtree_save_edx(char *file, QUADNODE *tree, int bin)
 {
-    FILE   *fp  = fopen(file, "wb");
-    int32_t idx = 0;
+    FILE *fp = fopen(file, "wb");
     if (fp) {
         fprintf(fp, "edog %s file v1.0.0 %10d %10d %10d %10d\r\n", bin ? "edb" : "edt", tree->left, tree->top, tree->right, tree->bottom);
-        quadtree_assign_index (tree, &idx   );
+        quadtree_assign_index (tree);
         quadtree_assign_chdidx(tree, fp, bin);
         fclose(fp);
     }
