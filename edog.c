@@ -230,7 +230,7 @@ void quadtree_save_edx(char *file, QUADNODE *tree, int bin)
 static void load_node_from_edt(QUADNODE *node, FILE *fp, int index)
 {
     int32_t idx, left, top, right, bottom, posx, posy, angle[5], speed, ctype, dtype, child[4];
-    fseek (fp, 66 + index * 145, SEEK_SET); // 66 is the size of file header, and 128 is the line size of edt record
+    fseek (fp, 66 + index * 145, SEEK_SET); // 66 is the size of file header, and 145 is the line size of edt record
     fscanf(fp, "%d (%d %d %d %d) (%d %d %d %d %d %d %d %d %d %d) (%d %d %d %d)",
           &idx, &left, &top, &right, &bottom, &posx, &posy, &angle[0], &angle[1], &angle[2], &angle[3], &angle[4],
           &speed, &ctype, &dtype, &(child[0]), &(child[1]), &(child[2]), &(child[3]));
